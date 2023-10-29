@@ -1,3 +1,4 @@
+//进程相关的系统调用
 #include "types.h"
 #include "riscv.h"
 #include "defs.h"
@@ -6,6 +7,9 @@
 #include "memlayout.h"
 #include "spinlock.h"
 #include "proc.h"
+
+//实现sysinfo
+#include"sysinfo.h"
 
 uint64
 sys_exit(void)
@@ -94,4 +98,30 @@ sys_uptime(void)
   xticks = ticks;
   release(&tickslock);
   return xticks;
+}
+//实现trace系统调用
+uint64
+sys_trace(){
+  argint(0, &(myproc()->trace_mask));//从trapframe(内核空间和用户空间共有的页面)中获取a0寄存器，保存到当前运行的进程的trace_mark,然后需要去
+  return 0;
+}
+
+//实现sysinfo系统调用
+uint64
+sys_sysinfo(void)
+{
+  struct sysinfo info;
+  freebytes(&info.freemem);
+  procnum(&info.nproc);
+
+  // 获取虚拟地址
+  uint64 dstaddr;
+  argaddr(0, &dstaddr);
+
+  // 从内核空间拷贝数据到用户空间
+  //copyout函数:
+  if (copyout(myproc()->pagetable, dstaddr, (char *)&info, sizeof info) < 0)
+    return -1;
+
+  return 0;
 }

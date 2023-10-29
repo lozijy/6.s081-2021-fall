@@ -8,6 +8,7 @@
 
 struct cpu cpus[NCPU];
 
+//进程控制块数组,proc定义在proc.h中
 struct proc proc[NPROC];
 
 struct proc *initproc;
@@ -302,7 +303,7 @@ fork(void)
   np->cwd = idup(p->cwd);
 
   safestrcpy(np->name, p->name, sizeof(p->name));
-
+  np->trace_mask = p->trace_mask;
   pid = np->pid;
 
   release(&np->lock);
@@ -652,5 +653,17 @@ procdump(void)
       state = "???";
     printf("%d %s %s", p->pid, state, p->name);
     printf("\n");
+  }
+}
+
+//获取空闲进程数,遍历proc数组(进程控制块数组),查询状态为unused的进程
+void
+procnum(uint64 *dst)
+{
+  *dst = 0;
+  struct proc *p;
+  for (p = proc; p < &proc[NPROC]; p++) {
+    if (p->state != UNUSED)
+      (*dst)++;
   }
 }

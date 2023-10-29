@@ -1,3 +1,4 @@
+//  虚拟内存相关
 #include "param.h"
 #include "types.h"
 #include "memlayout.h"
@@ -343,6 +344,7 @@ uvmclear(pagetable_t pagetable, uint64 va)
 // Copy from kernel to user.
 // Copy len bytes from src to virtual address dstva in a given page table.
 // Return 0 on success, -1 on error.
+//把len字节的数据从内核空间拷贝到用户空间 ，分别指明用户页表和用户虚拟地址，这里的指针给定是内核空间的虚拟地址指针
 int
 copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
 {

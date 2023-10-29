@@ -1,3 +1,4 @@
+//给用户进程分配空间
 // Physical memory allocator, for user processes,
 // kernel stacks, page-table pages,
 // and pipe buffers. Allocates whole 4096-byte pages.
@@ -22,6 +23,7 @@ struct {
   struct spinlock lock;
   struct run *freelist;
 } kmem;
+
 
 void
 kinit()
@@ -79,4 +81,18 @@ kalloc(void)
   if(r)
     memset((char*)r, 5, PGSIZE); // fill with junk
   return (void*)r;
+}
+//空闲内存
+void
+freebytes(uint64 *dst)
+{
+  *dst = 0;
+  struct run *p = kmem.freelist; 
+
+  acquire(&kmem.lock);//获取锁
+  while (p) {
+    *dst += PGSIZE;//dst增加一个页面的大小
+    p = p->next;
+  }
+  release(&kmem.lock);//释放锁
 }

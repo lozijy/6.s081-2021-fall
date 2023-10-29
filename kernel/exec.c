@@ -1,3 +1,4 @@
+//这段代码的作用是将一个可执行文件加载到内存中，并准备好新程序的运行环境，然后将控制权转移到新程序的入口处，使其开始执行。
 #include "types.h"
 #include "param.h"
 #include "memlayout.h"

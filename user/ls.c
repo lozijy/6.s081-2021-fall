@@ -52,12 +52,12 @@ ls(char *path)
       break;
     }
     strcpy(buf, path);
-    p = buf+strlen(buf);
+    p = buf+strlen(buf);//把指针p指向buf的尾部
     *p++ = '/';
     while(read(fd, &de, sizeof(de)) == sizeof(de)){
       if(de.inum == 0)
         continue;
-      memmove(p, de.name, DIRSIZ);
+      memmove(p, de.name, DIRSIZ);//把de.name内容送入p指针指向的内存
       p[DIRSIZ] = 0;
       if(stat(buf, &st) < 0){
         printf("ls: cannot stat %s\n", buf);

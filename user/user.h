@@ -23,6 +23,8 @@ int getpid(void);
 char* sbrk(int);
 int sleep(int);
 int uptime(void);
+//用户空间的trace接口，具体的形式在usys.S汇编中，这个汇编由usys.pl脚本生成
+int trace(int);
 
 // ulib.c
 int stat(const char*, struct stat*);
@@ -40,3 +42,7 @@ void free(void*);
 int atoi(const char*);
 int memcmp(const void *, const void *, uint);
 void *memcpy(void *, const void *, uint);
+
+//实现
+struct sysinfo;
+int sysinfo(struct sysinfo *);

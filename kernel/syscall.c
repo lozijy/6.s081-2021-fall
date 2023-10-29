@@ -1,3 +1,10 @@
+//这个文件实现一些系统调用时的安全问题，比如有些系统调用传递指针作为参数，内核必须使用这些指针来读取或写入用户内存
+//这个指针问题带来两个问题，一是指针可能不安全，用户可能会用它访问其他进程的空间或内核空间，其次内核页表映射和用户页表映射不同，内核不能用普通指令访问用户提供的地址
+//内核实现了安全地将数据传输到用户提供的地址和从用户提供的地址传输数据的功能,fetchaddr是一个例子
+//fetchstr调用copyinstr来完成这项困难的工作。
+
+//copyinstr（kernel/vm.c:406）从用户页表页表中的虚拟地址srcva复制max字节到dst。它使用walkaddr（它又调用walk）在软件中遍历页表，以确定srcva的物理地址pa0。由于内核将所有物理RAM地址映射到同一个内核虚拟地址，copyinstr可以直接将字符串字节从pa0复制到dst。walkaddr（kernel/vm.c:95）检查用户提供的虚拟地址是否为进程用户地址空间的一部分，因此程序不能欺骗内核读取其他内存
+//这个文件最重要的是提供了一个数组把系统调用号和对应处理函数进行映射syscalls /115,在这之前通过一系列extern表明这些函数是在外部实现的,实现的地方包括sysproc.c
 #include "types.h"
 #include "param.h"
 #include "memlayout.h"
@@ -104,7 +111,8 @@ extern uint64 sys_unlink(void);
 extern uint64 sys_wait(void);
 extern uint64 sys_write(void);
 extern uint64 sys_uptime(void);
-
+extern uint64 sys_trace(void);
+extern uint64 sys_sysinfo(void);
 static uint64 (*syscalls[])(void) = {
 [SYS_fork]    sys_fork,
 [SYS_exit]    sys_exit,
@@ -127,8 +135,34 @@ static uint64 (*syscalls[])(void) = {
 [SYS_link]    sys_link,
 [SYS_mkdir]   sys_mkdir,
 [SYS_close]   sys_close,
+[SYS_trace]   sys_trace,
+[SYS_sysinfo] sys_sysinfo,
 };
-
+static char *syscalls_name[] = {
+[SYS_fork]    "fork",
+[SYS_exit]    "exit",
+[SYS_wait]    "wait",
+[SYS_pipe]    "pipe",
+[SYS_read]    "read",
+[SYS_kill]    "kill",
+[SYS_exec]    "exec",
+[SYS_fstat]   "fstat",
+[SYS_chdir]   "chdir",
+[SYS_dup]     "dup",
+[SYS_getpid]  "getpid",
+[SYS_sbrk]    "sbrk",
+[SYS_sleep]   "sleep",
+[SYS_uptime]  "uptime",
+[SYS_open]    "open",
+[SYS_write]   "write",
+[SYS_mknod]   "mknod",
+[SYS_unlink]  "unlink",
+[SYS_link]    "link",
+[SYS_mkdir]   "mkdir",
+[SYS_close]   "close",
+[SYS_trace]   "trace",
+[SYS_sysinfo] "sysinfo"
+};
 void
 syscall(void)
 {
@@ -136,8 +170,11 @@ syscall(void)
   struct proc *p = myproc();
 
   num = p->trapframe->a7;
-  if(num > 0 && num < NELEM(syscalls) && syscalls[num]) {
+  if(num > 0 && num < NELEM(syscalls) &&syscalls[num]) {
     p->trapframe->a0 = syscalls[num]();
+    if ((1 << num) & p->trace_mask){
+    printf("%d: syscall %s -> %d\n",p->pid,syscalls_name[num],p->trapframe->a0);
+    }
   } else {
     printf("%d %s: unknown sys call %d\n",
             p->pid, p->name, num);
