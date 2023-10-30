@@ -337,23 +337,31 @@ sfence_vma()
 
 #define PGROUNDUP(sz)  (((sz)+PGSIZE-1) & ~(PGSIZE-1))
 #define PGROUNDDOWN(a) (((a)) & ~(PGSIZE-1))
-
+//有效
 #define PTE_V (1L << 0) // valid
+//可读
 #define PTE_R (1L << 1)
+//可写
 #define PTE_W (1L << 2)
+//X 可执行
 #define PTE_X (1L << 3)
+//USER用户态页表？
 #define PTE_U (1L << 4) // 1 -> user can access
-
+//GLOBAL
+#define PTE_G (1L << 5)
+//访问位
+#define PTE_A (1L << 6)
 // shift a physical address to the right place for a PTE.
 #define PA2PTE(pa) ((((uint64)pa) >> 12) << 10)
 
+//(pte) >> 10 将页表项右移 10 位，相当于将页表项中的物理页面地址部分提取出来。然后，<< 12 将提取出的物理页面地址左移 12 位，相当于将物理页面地址左对齐，并将低 12 位清零。
 #define PTE2PA(pte) (((pte) >> 10) << 12)
 
 #define PTE_FLAGS(pte) ((pte) & 0x3FF)
-
 // extract the three 9-bit page table indices from a virtual address.
 #define PXMASK          0x1FF // 9 bits
 #define PXSHIFT(level)  (PGSHIFT+(9*(level)))
+//宏可以从虚拟地址中提取出对应页表级别的索引值，用于访问相应级别的页表项。
 #define PX(level, va) ((((uint64) (va)) >> PXSHIFT(level)) & PXMASK)
 
 // one beyond the highest possible virtual address.

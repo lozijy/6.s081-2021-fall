@@ -6,6 +6,7 @@
 #include "proc.h"
 #include "defs.h"
 
+
 struct cpu cpus[NCPU];
 
 struct proc proc[NPROC];
@@ -101,6 +102,17 @@ allocpid() {
 // If found, initialize state required to run in the kernel,
 // and return with p->lock held.
 // If there are no free procs, or a memory allocation fails, return 0.
+//这段代码是用于在进程表中寻找一个未使用的进程（UNUSED proc）并进行初始化，以便在内核中运行。
+//通过循环遍历进程表（proc 数组）中的每个进程，从中找到一个状态为 UNUSED 的进程。
+//对找到的进程进行初始化。首先获取该进程的锁（p->lock），以确保在初始化过程中不会被其他进程干扰。
+//分配一个唯一的进程标识符（pid）给该进程，通过调用 allocpid() 函数来实现。
+//将进程状态设置为 USED，表示该进程已被使用。
+//分配一个 trapframe 页面，即用于保存进程的中断帧信息。如果分配失败，则释放之前分配的资源，并返回 0。
+//创建一个空的用户页表（user page table），通过调用 proc_pagetable() 函数来实现。如果创建失败，则释放之前分配的资源，并返回 0。
+//设置新的上下文（context）以便从 forkret 函数开始执行，forkret 函数用于返回到用户空间。同时，设置栈指针（sp）为进程的内核栈顶。
+//最后，返回初始化完成的进程指针。
+
+//分配pcb->用函数kalloc(kalloc.c)给几个指针trapframe,usyscall分配页面->进入函数proc_pagetable(proc.c)初始化页表，这个函数用几次mappage(vm.c)把已经分配的页面映射到虚拟地址空间
 static struct proc*
 allocproc(void)
 {
@@ -126,7 +138,11 @@ found:
     release(&p->lock);
     return 0;
   }
-
+  if((p->usyscall = (struct usyscall *)kalloc()) == 0){
+    freeproc(p);
+    release(&p->lock);
+    return 0;
+  }
   // An empty user page table.
   p->pagetable = proc_pagetable(p);
   if(p->pagetable == 0){
@@ -141,6 +157,7 @@ found:
   p->context.ra = (uint64)forkret;
   p->context.sp = p->kstack + PGSIZE;
 
+  p->usyscall->pid=p->pid;
   return p;
 }
 
@@ -155,6 +172,11 @@ freeproc(struct proc *p)
   p->trapframe = 0;
   if(p->pagetable)
     proc_freepagetable(p->pagetable, p->sz);
+    //清除usyscall
+  if(p->usyscall)
+    kfree((void*)p->usyscall);
+  p->usyscall=0;
+  
   p->pagetable = 0;
   p->sz = 0;
   p->pid = 0;
@@ -164,10 +186,20 @@ freeproc(struct proc *p)
   p->killed = 0;
   p->xstate = 0;
   p->state = UNUSED;
+  
 }
 
 // Create a user page table for a given process,
 // with no user memory, but with trampoline pages.
+//给定的进程创建用户页表（user page table）的函数。
+//步骤:
+//调用 uvmcreate() 创建一个空的页表，并将其赋值给变量 pagetable。uvmcreate() 是一个用于创建页表的函数，返回新创建的页表的地址。如果创建失败，返回值为 0，表示创建页表失败。
+
+//调用 mappages() 将 trampoline 代码映射到用户虚拟地址空间的最高地址处。trampoline 是用于系统调用返回的跳板代码，只有特权级别为 supervisor（内核态）的代码会使用它，因此不需要设置 PTE_U（用户态）权限位。mappages() 函数用于将物理页面映射到虚拟地址空间，将 trampoline 代码映射到 TRAMPOLINE 虚拟地址，并设置 PTE_R（可读）和 PTE_X（可执行）权限位。如果映射失败，将释放之前创建的页表，并返回 0。
+
+//调用 mappages() 将进程的 trapframe 映射到 TRAMPOLINE 下面的虚拟地址处，供 trampoline.S 使用。mappages() 函数将物理页面映射到虚拟地址空间中的 TRAPFRAME 地址，并设置 PTE_R（可读）和 PTE_W（可写）权限位。如果映射失败，将取消之前映射的 trampoline 代码，释放页表，并返回 0。
+
+//最后，如果所有映射都成功，则返回创建的页表 pagetable。
 pagetable_t
 proc_pagetable(struct proc *p)
 {
@@ -195,17 +227,26 @@ proc_pagetable(struct proc *p)
     uvmfree(pagetable, 0);
     return 0;
   }
+  //自行实现，映射一个只读页面到usycall,只读
+    if(mappages(pagetable, USYSCALL, PGSIZE,
+              (uint64)(p->usyscall), PTE_R | PTE_W) < 0){
+    uvmfree(pagetable, 0);
+    return 0;
+  }
 
   return pagetable;
 }
 
 // Free a process's page table, and free the
 // physical memory it refers to.
+//清除页表和他指向的内存，包括三个部分
 void
 proc_freepagetable(pagetable_t pagetable, uint64 sz)
 {
   uvmunmap(pagetable, TRAMPOLINE, 1, 0);
   uvmunmap(pagetable, TRAPFRAME, 1, 0);
+  //记得清除
+  uvmunmap(pagetable,USYSCALL,1,0);
   uvmfree(pagetable, sz);
 }
 
@@ -653,4 +694,19 @@ procdump(void)
     printf("%d %s %s", p->pid, state, p->name);
     printf("\n");
   }
+}
+int
+pgaccess(uint64 addr,int num,char * buff){
+  //页表
+  pagetable_t pgtb=myproc()->pagetable;
+  int ans=0;
+  //变量并给出答案
+    for(uint64 i=0;i<num;i++){
+      pde_t *pde=walk(pgtb,addr+(uint64)PGSIZE*i,0);
+      if(pde&&((*pde & PTE_R))){
+        ans|=1<<i;
+        *pde ^=PTE_A;
+      }
+    }
+  return copyout(pgtb,(uint64)buff,(char *)&ans,(uint64)sizeof ans);
 }

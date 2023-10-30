@@ -7,6 +7,7 @@
 #include "spinlock.h"
 #include "proc.h"
 
+
 uint64
 sys_exit(void)
 {
@@ -20,7 +21,10 @@ sys_exit(void)
 uint64
 sys_getpid(void)
 {
-  return myproc()->pid;
+  // return myproc()->pid;
+  //手动优化，使用一个虚拟页表和用户页表都有的只读页面，防止内核态到用户态的跳跃
+  struct proc* p=myproc();
+  return p->usyscall->pid;
 }
 
 uint64
@@ -80,6 +84,17 @@ sys_sleep(void)
 int
 sys_pgaccess(void)
 {
+  uint64 first_addr;
+  int pg_num;
+  uint64 buff;
+    if(argaddr(0, &first_addr) < 0)
+    return -1;
+      if(argint(0, &pg_num) < 0)
+    return -1;
+      if(argaddr(0, &buff) < 0)
+    return -1;
+  return pgaccess(first_addr,pg_num,(char*)buff);
+
   // lab pgtbl: your code here.
   return 0;
 }

@@ -6,6 +6,33 @@
 #include "defs.h"
 #include "fs.h"
 
+//打印页表
+//pagetable是一个64位的指针指向了一个地址
+void _vmprint(pagetable_t pagetable,int level){
+  // there are 2^9 = 512 PTEs in a page table.
+  for(int i = 0; i < 512; i++){
+    pte_t pte = pagetable[i];
+    //存在且它的权限标志位为0则该页表项会指向一个更低级的页表，不是叶子，然后通过PTE2PA将这个64位的PTE先右移10位获得物理地址再左移12位进行对齐
+
+    if(pte & PTE_V){
+      printf("..");
+      for(int i=0;i<level;i++){
+        printf(" ..");
+      }
+      printf("%d: pte %p pa %p\n",i,pte,PTE2PA(pte));
+    }
+    if((pte & PTE_V) && (pte & (PTE_R|PTE_W|PTE_X)) == 0){
+      // this PTE points to a lower-level page table.
+      uint64 child = PTE2PA(pte);
+      _vmprint((pagetable_t)child,level+1);
+    } 
+
+  }
+}
+void vmprint(pagetable_t pagetable){
+  _vmprint(pagetable,0);
+}
+
 /*
  * the kernel's page table.
  */
@@ -77,6 +104,7 @@ kvminithart()
 //   21..29 -- 9 bits of level-1 index.
 //   12..20 -- 9 bits of level-0 index.
 //    0..11 -- 12 bits of byte offset within the page.
+//一个用于在页表 pagetable 中查找虚拟地址 va 对应的页表项（PTE）的函数 walk()
 pte_t *
 walk(pagetable_t pagetable, uint64 va, int alloc)
 {
@@ -85,6 +113,7 @@ walk(pagetable_t pagetable, uint64 va, int alloc)
 
   for(int level = 2; level > 0; level--) {
     pte_t *pte = &pagetable[PX(level, va)];
+    //PTE_V页表项有效
     if(*pte & PTE_V) {
       pagetable = (pagetable_t)PTE2PA(*pte);
     } else {
@@ -261,6 +290,7 @@ uvmdealloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz)
   return newsz;
 }
 
+//freewalk 函数用于递归释放页表及其子级页表的内存，确保在释放之前，所有叶子节点（物理页面映射）已经被移除。这是一个用于清理页表的函数，通常在操作系统或虚拟内存管理中使用。
 // Recursively free page-table pages.
 // All leaf mappings must already have been removed.
 void
@@ -269,6 +299,7 @@ freewalk(pagetable_t pagetable)
   // there are 2^9 = 512 PTEs in a page table.
   for(int i = 0; i < 512; i++){
     pte_t pte = pagetable[i];
+    //存在且它的权限标志位为0则该页表项会指向一个更低级的页表，不是叶子，然后通过PTE2PA将这个64位的PTE先右移10位再左移12位
     if((pte & PTE_V) && (pte & (PTE_R|PTE_W|PTE_X)) == 0){
       // this PTE points to a lower-level page table.
       uint64 child = PTE2PA(pte);
@@ -432,3 +463,5 @@ copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
     return -1;
   }
 }
+
+
