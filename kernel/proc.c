@@ -97,6 +97,12 @@ allocpid() {
   return pid;
 }
 
+void tick_handler() {
+    printf("tick");
+}
+
+// 定义函数指针类型
+typedef void (*HandlerFunc)();
 // Look in the process table for an UNUSED proc.
 // If found, initialize state required to run in the kernel,
 // and return with p->lock held.
@@ -140,7 +146,11 @@ found:
   memset(&p->context, 0, sizeof(p->context));
   p->context.ra = (uint64)forkret;
   p->context.sp = p->kstack + PGSIZE;
+  p->ticks=0;
 
+
+// 将函数指针赋值给 p->handler
+p->handler = tick_handler;
   return p;
 }
 
@@ -164,6 +174,7 @@ freeproc(struct proc *p)
   p->killed = 0;
   p->xstate = 0;
   p->state = UNUSED;
+  p->ticks=0;
 }
 
 // Create a user page table for a given process,

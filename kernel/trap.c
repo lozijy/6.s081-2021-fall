@@ -65,8 +65,17 @@ usertrap(void)
     intr_on();
 
     syscall();
-  } else if((which_dev = devintr()) != 0){
-    // ok
+  }
+  //中断，包括定时器中断 
+  else if((which_dev = devintr()) != 0){
+    //定时器中断
+    if(which_dev==2){
+      p->ticks++;
+      if(p->ticks==p->alarm_interval){ 
+        p->trapframe->epc=(uint64)p->handler;
+        p->ticks=0;//第一个参数
+      }
+      }
   } else {
     printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
     printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());

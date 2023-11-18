@@ -41,6 +41,9 @@ extern struct cpu cpus[NCPU];
 // the trapframe includes callee-saved user registers like s0-s11 because the
 // return-to-user path via usertrapret() doesn't return through
 // the entire kernel call stack.
+//陷阱帧是在处理异常或中断时保存有关进程状态和上下文的数据结构。它包含了在处理陷阱时需要保存和恢复的寄存器值。
+
+//在给定的代码中，struct trapframe定义了陷阱帧的布局。每个字段代表一个寄存器的值，包括内核页表（kernel_satp）、内核栈顶（kernel_sp）、用户陷阱处理函数（kernel_trap）、保存的用户程序计数器（epc）、保存的内核tp寄存器（kernel_hartid），以及一系列保存的用户寄存器（ra、sp、gp、tp、t0、t1、t2、s0、s1、a0、a1、a2、a3、a4、a5、a6、a7、s2、s3、s4、s5、s6、s7、s8、s9、s10、s11、t3、t4、t5、t6）。
 struct trapframe {
   /*   0 */ uint64 kernel_satp;   // kernel page table
   /*   8 */ uint64 kernel_sp;     // top of process's kernel stack
@@ -105,4 +108,7 @@ struct proc {
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
+  int ticks;//剩余嘀嗒数
+  void(*handler)();
+  int alarm_interval;
 };
