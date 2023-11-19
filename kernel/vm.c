@@ -175,7 +175,8 @@ uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
     if((pte = walk(pagetable, a, 0)) == 0)
       panic("uvmunmap: walk");
     if((*pte & PTE_V) == 0)
-      panic("uvmunmap: not mapped");
+      //panic("uvmunmap: not mapped");//允许这种未匹配的行为，在我们实现lazy allocation和cow之后
+      continue;
     if(PTE_FLAGS(*pte) == PTE_V)
       panic("uvmunmap: not a leaf");
     if(do_free){
@@ -304,6 +305,7 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
   pte_t *pte;
   uint64 pa, i;
   uint flags;
+
   // char *mem;
   printf("uvmcopy\n");
   for(i = 0; i < sz; i += PGSIZE){
@@ -313,7 +315,9 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
       panic("uvmcopy: page not present");
     pa = PTE2PA(*pte);
     flags = PTE_FLAGS(*pte);
-    mappages(new,i,PGSIZE,pa,flags&=~PTE_W);//may error
+    flags&=~PTE_W;//W位置0
+    flags|=PTE_COW;//cow位置1
+    mappages(new,i,PGSIZE,pa,flags&=~PTE_W);//may error,不允许读
     // mappages(new,i,PGSIZE,pa,flags&=~PTE_W)!=0
     //{
     //   goto err;
