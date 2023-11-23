@@ -182,6 +182,7 @@ uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
     if(do_free){
       uint64 pa = PTE2PA(*pte);
       kfree((void*)pa);
+      
     }
     *pte = 0;
   }
@@ -298,6 +299,8 @@ uvmfree(pagetable_t pagetable, uint64 sz)
 // physical memory.
 // returns 0 on success, -1 on failure.
 // frees any allocated pages on failure.
+
+
 //给定一个父进程的页表，把他拷贝到子进程的页表中
 int
 uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
@@ -307,16 +310,19 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
   uint flags;
 
   // char *mem;
-  printf("uvmcopy\n");
   for(i = 0; i < sz; i += PGSIZE){
     if((pte = walk(old, i, 0)) == 0)
       panic("uvmcopy: pte should exist");
     if((*pte & PTE_V) == 0)
       panic("uvmcopy: page not present");
     pa = PTE2PA(*pte);
-    flags = PTE_FLAGS(*pte);
-    flags&=~PTE_W;//W位置0
-    flags|=PTE_COW;//cow位置1
+        flags = PTE_FLAGS(*pte);
+    if(flags & PTE_W) {
+      // 禁用写并设置COW Fork标记
+      flags = (flags | PTE_COW) & ~PTE_W;
+      *pte = PA2PTE(pa) | flags;
+    }
+    kaddrefcnt((char*)pa);
     mappages(new,i,PGSIZE,pa,flags&=~PTE_W);//may error,不允许读
     // mappages(new,i,PGSIZE,pa,flags&=~PTE_W)!=0
     //{
@@ -363,6 +369,11 @@ copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
   while(len > 0){
     va0 = PGROUNDDOWN(dstva);
     pa0 = walkaddr(pagetable, va0);
+    // 处理COW页面的情况
+    if(cowpage(pagetable, va0) == 0) {
+      // 更换目标物理地址
+      pa0 = (uint64)cowalloc(pagetable, va0);
+    }
     if(pa0 == 0)
       return -1;
     n = PGSIZE - (dstva - va0);

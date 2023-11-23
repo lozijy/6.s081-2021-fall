@@ -29,38 +29,41 @@ trapinithart(void)
   w_stvec((uint64)kernelvec);
 }
 
-//处理lazy allocation
-void lazy_handler(struct proc *p){
-    uint64 va=r_stval();
-    printf("page fault %p\n",va);
-    uint64 ka=(uint64)kalloc();
-    if(ka==0){
-      p->killed=1;
-    }else{
-      memset((void*)ka,0,PGSIZE);
-      va=PGROUNDDOWN(va);
-      if(mappages(p->pagetable,va,PGSIZE,ka,PTE_W|PTE_U|PTE_R)!=0){
-        kfree((void *)ka);
-        p->killed=1;
-      }
-    }
-}
+// //处理lazy allocation
+// void lazy_handler(struct proc *p){
+//     uint64 va=r_stval();
+//     printf("page fault %p\n",va);
+//     uint64 ka=(uint64)kalloc();
+//     if(ka==0){
+//       p->killed=1;
+//     }else{
+//       memset((void*)ka,0,PGSIZE);
+//       va=PGROUNDDOWN(va);
+//       if(mappages(p->pagetable,va,PGSIZE,ka,PTE_W|PTE_U|PTE_R)!=0){
+//         kfree((void *)ka);
+//         p->killed=1;
+//       }
+//     }
+// }
 //处理cow
-void cow_handler(struct proc *p,uint64 va,pte_t*pte){
-  printf("cow handler\n");
-    uint64 ka=(uint64)kalloc();
-    uint flag=PTE_FLAGS(*pte);
-    if(ka==0){
-      p->killed=1;
-    }else{
-      memset((void*)ka,0,PGSIZE);
-      va=PGROUNDDOWN(va);
-      if(mappages(p->pagetable,va,PGSIZE,ka,flag)!=0){
-        kfree((void *)ka);
-        p->killed=1;
-      }
-    }
-}
+// void cow_handler(struct proc *p,uint64 va,pte_t*pte){
+//   printf("cow handler pte:%p\n",*pte);
+//     uint64 ka=(uint64)kalloc();
+//     uint flag=PTE_FLAGS(*pte);
+//     if(ka==0){
+//       p->killed=1;
+//     }else{
+//       memset((void*)ka,0,PGSIZE);
+//       va=PGROUNDDOWN(va);
+//       flag|=PTE_W;
+//       *pte=PA2PTE(ka)|flag;
+//       printf("PTE CHANGE pte:%p\n",*pte);
+//       // if(mappages(p->pagetable,va,PGSIZE,ka,flag)!=0){
+//       //   kfree((void *)ka);
+//       //   p->killed=1;
+//       // }
+//     }
+// }
 //
 // handle an interrupt, exception, or system call from user space.
 // called from trampoline.S
@@ -99,17 +102,10 @@ usertrap(void)
     syscall();
   } 
   // store_page_err-lazy_allocation,写入内存页面错误,我们暂时只处理cow吧
-  else if(r_scause()==15){
+  else if(r_scause()==15||r_scause()==13){
     uint64 va=r_stval();//虚拟地址
-    uint64 pc=r_sepc();//出现错误的指令，后面会重新执行这条指令
-    pc+=1;
-    pte_t* pte=walk(p->pagetable,va,0);
-    printf("page fault va:%p\n,pte:%p",va,*pte);
-    if((*pte&PTE_COW)!=0){
-      cow_handler(p,va,pte);
-    }else{
-      lazy_handler(p);
-    }
+    if(va >= p->sz|| cowpage(p->pagetable, va) != 0|| cowalloc(p->pagetable, PGROUNDDOWN(va)) == 0)
+      p->killed = 1;
     }
 
     
@@ -195,7 +191,7 @@ kerneltrap()
   int which_dev = 0;
   uint64 sepc = r_sepc();
   uint64 sstatus = r_sstatus();
-  uint64 scause = r_scause();
+  // uint64 scause = r_scause();
   
   if((sstatus & SSTATUS_SPP) == 0)
     panic("kerneltrap: not from supervisor mode");
@@ -203,8 +199,7 @@ kerneltrap()
     panic("kerneltrap: interrupts enabled");
 
   if((which_dev = devintr()) == 0){
-    printf("scause %p\n", scause);
-    printf("sepc=%p stval=%p\n", r_sepc(), r_stval());
+
     panic("kerneltrap");
   }
 

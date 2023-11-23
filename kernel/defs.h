@@ -9,6 +9,7 @@ struct sleeplock;
 struct stat;
 struct superblock;
 
+#define COUNT_SZ ((uint64)(((uint64)PHYSTOP - (uint64)end) / 4096))
 // bio.c
 void            binit(void);
 struct buf*     bread(uint, uint);
@@ -63,6 +64,10 @@ void            ramdiskrw(struct buf*);
 void*           kalloc(void);
 void            kfree(void *);
 void            kinit(void);
+int cowpage(pagetable_t , uint64 );
+void* cowalloc(pagetable_t , uint64 ) ;
+int krefcnt(void* pa) ;
+int  kaddrefcnt(void * );
 
 // log.c
 void            initlog(int, struct superblock*);
@@ -170,6 +175,7 @@ uint64          walkaddr(pagetable_t, uint64);
 int             copyout(pagetable_t, uint64, char *, uint64);
 int             copyin(pagetable_t, char *, uint64, uint64);
 int             copyinstr(pagetable_t, char *, uint64, uint64);
+pte_t *         walk(pagetable_t , uint64 , int );
 
 // plic.c
 void            plicinit(void);
